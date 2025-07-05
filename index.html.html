@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pause Point - Mindful Moments</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .breathing-animation {
+      animation: breathing 4s ease-in-out infinite;
+    }
+    
+    @keyframes breathing {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    
+    .fade-in {
+      animation: fadeIn 0.6s ease-in-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .card-border {
+      border: 2px solid rgba(0,0,0,0.2);
+      backdrop-filter: blur(10px);
+    }
+    
+    .dark .card-border {
+      border: 2px solid rgba(0,0,0,0.4);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script>
+    // Simple in-memory storage
+    const AppStorage = {
+      prompts: [
+        { id: 1, text: "What's the furthest sound you can hear?", category: "senses", isActive: true, isCustom: false },
+        { id: 2, text: "Notice three things you're grateful for right now.", category: "gratitude", isActive: true, isCustom: false },
+        { id: 3, text: "Take a deep breath and feel your feet on the ground.", category: "body", isActive: true, isCustom: false },
+        { id: 4, text: "What thoughts are passing through your mind?", category: "focus", isActive: true, isCustom: false },
+        { id: 5, text: "Feel the texture of something near you.", category: "senses", isActive: true, isCustom: false },
+        { id: 6, text: "What small beauty can you appreciate right now?", category: "gratitude", isActive: true, isCustom: false },
+        { id: 7, text: "Notice your posture and adjust it gently.", category: "body", isActive: true, isCustom: false },
+        { id: 8, text: "Where is your attention drawn to naturally?", category: "focus", isActive: true, isCustom: false }
+      ],
+      customPrompts: JSON.parse(localStorage.getItem('customPrompts') || '[]'),
+      reflections: JSON.parse(localStorage.getItem('reflections') || '[]'),
+      settings: JSON.parse(localStorage.getItem('settings') || '{"backgroundColor": "sage-warm", "theme": "light"}'),
+      
+      getAllPrompts() {
+        return [...this.prompts, ...this.customPrompts].filter(p => p.isActive);
+      },
+      
+      addCustomPrompt(prompt) {
+        const newPrompt = {
+          id: Date.now(),
+          ...prompt,
+          isCustom: true,
+          isActive: true,
+          createdAt: new Date()
+        };
+        this.customPrompts.push(newPrompt);
+        localStorage.setItem('customPrompts', JSON.stringify(this.customPrompts));
+        return newPrompt;
+      },
+      
+      deleteCustomPrompt(id) {
+        this.customPrompts = this.customPrompts.filter(p => p.id !== id);
+        localStorage.setItem('customPrompts', JSON.stringify(this.customPrompts));
+      },
+      
+      addReflection(reflection) {
+        const newReflection = {
+          id: Date.now(),
+          ...reflection,
+          createdAt: new Date().toISOString()
+        };
+        this.reflections.push(newReflection);
+        localStorage.setItem('reflections', JSON.stringify(this.reflections));
+        return newReflection;
+      },
+      
+      updateSettings(newSettings) {
+        this.settings = { ...this.settings, ...newSettings };
+        localStorage.setItem('settings', JSON.stringify(this.settings));
+      }
+    };
+    
+    // Background options
+    const backgroundOptions = [
+      { id: 'sage-warm', name: 'Sage & Warm', lightClass: 'from-warm-50 to-sage-50', darkClass: 'from-gray-900 to-gray-800', preview: 'linear-gradient(135deg, #fdf8f6, #f0f9ff)' },
+      { id: 'ocean-blue', name: 'Ocean Blue', lightClass: 'from-blue-50 to-cyan-50', darkClass: 'from-blue-900 to-cyan-900', preview: 'linear-gradient(135deg, #eff6ff, #ecfeff)' },
+      { id: 'sunset-pink', name: 'Sunset Pink', lightClass: 'from-pink-50 to-orange-50', darkClass: 'from-pink-900 to-orange-900', preview: 'linear-gradient(135deg, #fdf2f8, #fff7ed)' },
+      { id: 'forest-green', name: 'Forest Green', lightClass: 'from-green-50 to-emerald-50', darkClass: 'from-green-900 to-emerald-900', preview: 'linear-gradient(135deg, #f0fdf4, #ecfdf5)' },
+      { id: 'lavender', name: 'Lavender', lightClass: 'from-purple-50 to-violet-50', darkClass: 'from-purple-900 to-violet-900', preview: 'linear-gradient(135deg, #faf5ff, #f5f3ff)' },
+      { id: 'aurora', name: 'Aurora', lightClass: 'from-indigo-50 via-purple-50 to-pink-50', darkClass: 'from-indigo-900 via-purple-900 to-pink-900', preview: 'linear-gradient(135deg, #eef2ff, #faf5ff, #fdf2f8)' }
+    ];
+    
+    function getBackgroundClasses(backgroundId, isDark) {
+      const option = backgroundOptions.find(bg => bg.id === backgroundId) || backgroundOptions[0];
+      return isDark ? option.darkClass : option.lightClass;
+    }
+    
+    // Simple prompt selector (consistent daily prompt)
+    function getDailyPrompt(prompts) {
+      if (!prompts.length) return null;
+      const today = new Date().toDateString();
+      const hash = today.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      return prompts[Math.abs(hash) % prompts.length];
+    }
+    
+    // React App Component
+    function PausePointApp() {
+      const [currentPage, setCurrentPage] = React.useState('home');
+      const [prompts, setPrompts] = React.useState(AppStorage.getAllPrompts());
+      const [settings, setSettings] = React.useState(AppStorage.settings);
+      const [showReflectionDialog, setShowReflectionDialog] = React.useState(false);
+      const [showCustomPromptDialog, setShowCustomPromptDialog] = React.useState(false);
+      const [reflectionText, setReflectionText] = React.useState('');
+      const [moodRating, setMoodRating] = React.useState(5);
+      const [customPromptText, setCustomPromptText] = React.useState('');
+      const [customPromptCategory, setCustomPromptCategory] = React.useState('');
+      
+      const dailyPrompt = getDailyPrompt(prompts);
+      const backgroundClasses = getBackgroundClasses(settings.backgroundColor || 'sage-warm', settings.theme === 'dark');
+      
+      const updateSettings = (newSettings) => {
+        const updated = { ...settings, ...newSettings };
+        setSettings(updated);
+        AppStorage.updateSettings(updated);
+      };
+      
+      const addCustomPrompt = () => {
+        if (customPromptText.trim() && customPromptCategory) {
+          AppStorage.addCustomPrompt({
+            text: customPromptText.trim(),
+            category: customPromptCategory
+          });
+          setPrompts(AppStorage.getAllPrompts());
+          setCustomPromptText('');
+          setCustomPromptCategory('');
+          setShowCustomPromptDialog(false);
+        }
+      };
+      
+      const deleteCustomPrompt = (id) => {
+        AppStorage.deleteCustomPrompt(id);
+        setPrompts(AppStorage.getAllPrompts());
+      };
+      
+      const addReflection = () => {
+        if (reflectionText.trim() && dailyPrompt) {
+          AppStorage.addReflection({
+            text: reflectionText.trim(),
+            promptId: dailyPrompt.id,
+            promptText: dailyPrompt.text,
+            category: dailyPrompt.category,
+            moodRating: moodRating
+          });
+          setReflectionText('');
+          setMoodRating(5);
+          setShowReflectionDialog(false);
+        }
+      };
+      
+      const sharePrompt = () => {
+        if (navigator.share && dailyPrompt) {
+          navigator.share({
+            title: 'Pause Point',
+            text: `"${dailyPrompt.text}" - Take a moment to pause and reflect.`,
+          });
+        } else if (dailyPrompt) {
+          navigator.clipboard.writeText(`"${dailyPrompt.text}" - Pause Point`);
+        }
+      };
+      
+      // Navigation
+      const NavButton = ({ page, icon, label, isActive }) => (
+        React.createElement('button', {
+          onClick: () => setCurrentPage(page),
+          className: `flex flex-col items-center py-2 px-1 ${isActive ? 'text-sage-600' : 'text-gray-400'}`
+        }, [
+          React.createElement('div', { key: 'icon', className: 'text-lg mb-1' }, icon),
+          React.createElement('span', { key: 'label', className: 'text-xs' }, label)
+        ])
+      );
+      
+      // Pages
+      const HomePage = () => (
+        React.createElement('div', { className: `min-h-screen bg-gradient-to-br ${backgroundClasses} px-4 py-8` }, [
+          React.createElement('div', { key: 'content', className: 'max-w-md mx-auto' }, [
+            React.createElement('div', { key: 'header', className: 'text-center mb-8' }, [
+              React.createElement('h1', { key: 'title', className: 'text-3xl font-light text-gray-800 dark:text-white mb-2' }, 'Pause Point'),
+              React.createElement('p', { key: 'subtitle', className: 'text-gray-600 dark:text-gray-400' }, 'by Wayne Exton')
+            ]),
+            
+            dailyPrompt ? React.createElement('div', { key: 'prompt-card', className: 'bg-white/30 dark:bg-gray-800/30 card-border rounded-3xl p-8 mb-8 text-center fade-in' }, [
+              React.createElement('div', { key: 'prompt-header', className: 'mb-6' }, [
+                React.createElement('div', { key: 'icon-container', className: 'w-16 h-16 bg-sage-400/20 rounded-full flex items-center justify-center mx-auto mb-4 breathing-animation' }, 
+                  React.createElement('div', { className: 'text-sage-500 text-2xl' }, '⏸️')
+                ),
+                React.createElement('p', { key: 'label', className: 'text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 font-medium mb-2' }, 'Today\'s Moment')
+              ]),
+              
+              React.createElement('blockquote', { key: 'prompt-text', className: 'text-lg sm:text-xl leading-relaxed text-gray-800 dark:text-gray-100 font-medium mb-8 italic' }, 
+                `"${dailyPrompt.text}"`
+              ),
+              
+              React.createElement('p', { key: 'instruction', className: 'text-sm text-gray-600 dark:text-gray-400 mb-8 leading-relaxed' }, 
+                'That\'s it. Just notice. Breathe. Carry on.'
+              ),
+              
+              React.createElement('div', { key: 'actions', className: 'flex flex-col gap-3' }, [
+                React.createElement('div', { key: 'action-buttons', className: 'flex gap-3' }, [
+                  React.createElement('button', {
+                    key: 'reflect-btn',
+                    onClick: () => setShowReflectionDialog(true),
+                    className: 'flex-1 bg-sage-500 hover:bg-sage-600 text-white px-6 py-3 rounded-xl font-medium transition-all'
+                  }, ['✏️ Write Reflection']),
+                  
+                  React.createElement('button', {
+                    key: 'share-btn',
+                    onClick: sharePrompt,
+                    className: 'flex-1 bg-white/50 hover:bg-white/70 text-gray-700 px-6 py-3 rounded-xl font-medium border border-gray-200 transition-all'
+                  }, ['📤 Share'])
+                ])
+              ])
+            ]) : React.createElement('div', { key: 'loading', className: 'text-center py-12' }, 'Loading your daily prompt...')
+          ])
+        ])
+      );
+      
+      const SettingsPage = () => (
+        React.createElement('div', { className: `min-h-screen bg-gradient-to-br ${backgroundClasses} px-4 py-8` }, [
+          React.createElement('div', { key: 'content', className: 'max-w-md mx-auto' }, [
+            React.createElement('h1', { key: 'title', className: 'text-2xl font-semibold text-gray-800 dark:text-white mb-8' }, 'Settings'),
+            
+            // Background Colors
+            React.createElement('div', { key: 'bg-settings', className: 'bg-white/30 dark:bg-gray-800/30 card-border rounded-xl p-6 mb-6' }, [
+              React.createElement('h3', { key: 'bg-title', className: 'text-lg font-medium text-gray-800 dark:text-white mb-4' }, '🎨 Background Color'),
+              React.createElement('div', { key: 'bg-grid', className: 'grid grid-cols-2 gap-3' }, 
+                backgroundOptions.map(option => 
+                  React.createElement('button', {
+                    key: option.id,
+                    onClick: () => updateSettings({ backgroundColor: option.id }),
+                    className: `p-3 rounded-xl border-2 transition-all ${
+                      settings.backgroundColor === option.id || (!settings.backgroundColor && option.id === 'sage-warm')
+                        ? 'border-sage-400 bg-sage-50'
+                        : 'border-gray-200 hover:border-sage-300'
+                    }`
+                  }, [
+                    React.createElement('div', { 
+                      key: 'preview',
+                      className: 'w-full h-8 rounded-lg mb-2',
+                      style: { background: option.preview }
+                    }),
+                    React.createElement('span', { key: 'name', className: 'text-xs font-medium text-gray-700' }, option.name)
+                  ])
+                )
+              )
+            ]),
+            
+            // Custom Prompts
+            React.createElement('div', { key: 'custom-prompts', className: 'bg-white/30 dark:bg-gray-800/30 card-border rounded-xl p-6 mb-6' }, [
+              React.createElement('div', { key: 'header', className: 'flex justify-between items-center mb-4' }, [
+                React.createElement('h3', { key: 'title', className: 'text-lg font-medium text-gray-800 dark:text-white' }, '✏️ Custom Prompts'),
+                React.createElement('button', {
+                  key: 'add-btn',
+                  onClick: () => setShowCustomPromptDialog(true),
+                  className: 'bg-sage-500 hover:bg-sage-600 text-white px-4 py-2 rounded-lg text-sm'
+                }, '+ Add')
+              ]),
+              
+              AppStorage.customPrompts.length === 0 ? 
+                React.createElement('p', { key: 'empty', className: 'text-gray-600 dark:text-gray-400 text-sm text-center py-4' }, 'No custom prompts yet. Create your own!') :
+                React.createElement('div', { key: 'prompts-list', className: 'space-y-3' },
+                  AppStorage.customPrompts.map(prompt =>
+                    React.createElement('div', { key: prompt.id, className: 'bg-white/50 rounded-lg p-3 flex justify-between items-start' }, [
+                      React.createElement('div', { key: 'prompt-content', className: 'flex-1' }, [
+                        React.createElement('span', { key: 'category', className: 'text-xs bg-sage-100 text-sage-800 px-2 py-1 rounded' }, prompt.category),
+                        React.createElement('p', { key: 'text', className: 'text-sm text-gray-700 mt-2' }, prompt.text)
+                      ]),
+                      React.createElement('button', {
+                        key: 'delete-btn',
+                        onClick: () => deleteCustomPrompt(prompt.id),
+                        className: 'text-red-500 hover:text-red-700 ml-2'
+                      }, '🗑️')
+                    ])
+                  )
+                )
+            ])
+          ])
+        ])
+      );
+      
+      // Dialogs
+      const ReflectionDialog = () => showReflectionDialog && React.createElement('div', { className: 'fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50' }, [
+        React.createElement('div', { key: 'dialog', className: 'bg-white rounded-xl p-6 w-full max-w-md' }, [
+          React.createElement('h3', { key: 'title', className: 'text-lg font-semibold mb-4' }, 'Write Reflection'),
+          React.createElement('textarea', {
+            key: 'textarea',
+            value: reflectionText,
+            onChange: (e) => setReflectionText(e.target.value),
+            placeholder: 'How did this prompt make you feel? What did you notice?',
+            className: 'w-full p-3 border rounded-lg mb-4 h-32 resize-none'
+          }),
+          React.createElement('div', { key: 'mood', className: 'mb-4' }, [
+            React.createElement('label', { key: 'mood-label', className: 'block text-sm font-medium mb-2' }, 'Mood (1-10)'),
+            React.createElement('input', {
+              key: 'mood-input',
+              type: 'range',
+              min: '1',
+              max: '10',
+              value: moodRating,
+              onChange: (e) => setMoodRating(parseInt(e.target.value)),
+              className: 'w-full'
+            }),
+            React.createElement('div', { key: 'mood-value', className: 'text-center text-sm text-gray-600' }, `Current: ${moodRating}`)
+          ]),
+          React.createElement('div', { key: 'actions', className: 'flex gap-3' }, [
+            React.createElement('button', {
+              key: 'cancel',
+              onClick: () => setShowReflectionDialog(false),
+              className: 'flex-1 px-4 py-2 border rounded-lg'
+            }, 'Cancel'),
+            React.createElement('button', {
+              key: 'save',
+              onClick: addReflection,
+              className: 'flex-1 px-4 py-2 bg-sage-500 text-white rounded-lg'
+            }, 'Save')
+          ])
+        ])
+      ]);
+      
+      const CustomPromptDialog = () => showCustomPromptDialog && React.createElement('div', { className: 'fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50' }, [
+        React.createElement('div', { key: 'dialog', className: 'bg-white rounded-xl p-6 w-full max-w-md' }, [
+          React.createElement('h3', { key: 'title', className: 'text-lg font-semibold mb-4' }, 'Create Custom Prompt'),
+          React.createElement('textarea', {
+            key: 'textarea',
+            value: customPromptText,
+            onChange: (e) => setCustomPromptText(e.target.value),
+            placeholder: 'Enter your mindfulness prompt...',
+            className: 'w-full p-3 border rounded-lg mb-4 h-32 resize-none'
+          }),
+          React.createElement('select', {
+            key: 'category',
+            value: customPromptCategory,
+            onChange: (e) => setCustomPromptCategory(e.target.value),
+            className: 'w-full p-3 border rounded-lg mb-4'
+          }, [
+            React.createElement('option', { key: 'default', value: '' }, 'Select category...'),
+            React.createElement('option', { key: 'focus', value: 'focus' }, 'Focus'),
+            React.createElement('option', { key: 'gratitude', value: 'gratitude' }, 'Gratitude'),
+            React.createElement('option', { key: 'body', value: 'body' }, 'Body'),
+            React.createElement('option', { key: 'senses', value: 'senses' }, 'Senses'),
+            React.createElement('option', { key: 'custom', value: 'custom' }, 'Custom')
+          ]),
+          React.createElement('div', { key: 'actions', className: 'flex gap-3' }, [
+            React.createElement('button', {
+              key: 'cancel',
+              onClick: () => setShowCustomPromptDialog(false),
+              className: 'flex-1 px-4 py-2 border rounded-lg'
+            }, 'Cancel'),
+            React.createElement('button', {
+              key: 'create',
+              onClick: addCustomPrompt,
+              className: 'flex-1 px-4 py-2 bg-sage-500 text-white rounded-lg'
+            }, 'Create')
+          ])
+        ])
+      ]);
+      
+      return React.createElement('div', { className: 'min-h-screen' }, [
+        // Main content
+        currentPage === 'home' ? React.createElement(HomePage, { key: 'home' }) : React.createElement(SettingsPage, { key: 'settings' }),
+        
+        // Bottom navigation
+        React.createElement('nav', { key: 'nav', className: 'fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-gray-200' }, [
+          React.createElement('div', { key: 'nav-content', className: 'flex justify-around py-2 max-w-md mx-auto' }, [
+            React.createElement(NavButton, { key: 'home-nav', page: 'home', icon: '🏠', label: 'Today', isActive: currentPage === 'home' }),
+            React.createElement(NavButton, { key: 'settings-nav', page: 'settings', icon: '⚙️', label: 'Settings', isActive: currentPage === 'settings' })
+          ])
+        ]),
+        
+        // Dialogs
+        React.createElement(ReflectionDialog, { key: 'reflection-dialog' }),
+        React.createElement(CustomPromptDialog, { key: 'custom-prompt-dialog' })
+      ]);
+    }
+    
+    // Render the app
+    ReactDOM.render(React.createElement(PausePointApp), document.getElementById('root'));
+  </script>
+</body>
+</html>
